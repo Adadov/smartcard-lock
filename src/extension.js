@@ -15,10 +15,13 @@
  *
  */
 
-const { GObject, Gio, GLib } = imports.gi;
+import Gio from "gi://Gio";
+import GLib from "gi://GLib";
 
-const ExtensionUtils = imports.misc.extensionUtils;
-const Me = ExtensionUtils.getCurrentExtension();
+import { Extension, gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
+
+let proxies;
+let metadata;
 
 function proxy_cleanup(connection, name) {
 	if (proxies !== null) {
@@ -32,11 +35,11 @@ function proxy_cleanup(connection, name) {
 
 
 function mylog(message) {
-	if(Me.metadata.debug == true) log(`${Me.metadata.name}: ` + message);
+	console.log(`${metadata.name}: ` + message);
 }
 
 function onSmartCardAppeared(connection, name, _owner) {
-	//log(`"${name}" appeared on the session bus`);
+	mylog(`"${name}" appeared on the session bus`);
 
 	const notification_tokens = new GLib.Variant('()', [
 		'GNOME Smartcard Lock',
@@ -62,7 +65,7 @@ function onSmartCardAppeared(connection, name, _owner) {
 		(session, res) => {
 			try {
 				const reply = session.call_finish(res);
-				values = reply.get_child_value(0);
+				const values = reply.get_child_value(0);
 				for( let [prop, value] of Object.entries(values.deepUnpack()) ) {
 					mylog(`Following presence of smartcard: ${value}`);
 					try {
@@ -75,14 +78,14 @@ function onSmartCardAppeared(connection, name, _owner) {
 						let id = proxy.connect('g-properties-changed', checkSmartCardRemoved);
 						proxies.set(id, proxy);
 					} catch (err) {
-						log(`${Me.metadata.name}: ${err}`);
+						mylog(`${name}: ${err}`);
 						return;
 					}
 				}
 			} catch(e) {
 				if (e instanceof Gio.DBusError)
 					Gio.DBusError.strip_remote_error(e);
-				log(`${Me.metadata.name}: ${e}`);
+				mylog(`${name}: ${e}`);
 			}
 		}
 	);
@@ -130,15 +133,9 @@ const token_interface_xml = `
 </node>
 `;
 
-proxies = new Map();
-
-class Extension {
-	constructor() {
-		this.busWatchId = 0;
-	}
-
-	
+export default class SmartlockExtension extends Extension {	
 	enable() {
+		metadata = this.metadata;
 		mylog('enabling');
 		proxies = new Map();
 		this.busWatchId = Gio.bus_watch_name(
@@ -159,9 +156,9 @@ class Extension {
 		Gio.bus_unwatch_name(this.busWatchId);
 		this.busWatchId = 0;
 	}
-}
-
-function init() {
-	mylog(`initializing`);
-	return new Extension();
+	
+	// init() {
+	// 	mylog(`initializing`);
+	// 	return new SmartlockExtension();
+	// }
 }
